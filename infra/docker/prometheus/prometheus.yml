@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # 1. The Sync Application
+  - job_name: 'sync-app'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:8001']
+        labels:
+          app_type: 'sync'
+
+  # 2. The Async Application
+  - job_name: 'async-app'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:8002']
+        labels:
+          app_type: 'async'
+
+  # 3. Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

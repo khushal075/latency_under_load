@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: latency-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: benchmark
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  pgbouncer:
+    image: edoburu/pgbouncer
+    container_name: latency-pgbouncer
+    depends_on:
+      - postgres
+    ports:
+      - "6432:6432"
+    volumes:
+      - ./pgbouncer:/etc/pgbouncer
+    environment:
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: benchmark
+
+  # --- Observability Stack ---
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: latency-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: latency-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Disables the login for easier local benchmarking
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      # 1. Datasource (Prometheus connection)
+      - ./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+
+      # 2. Dashboard Provider (Tells Grafana to scan the folder)
+      # Note: This assumes you created the provider.yaml mentioned in the last step
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+
+      # 3. Actual JSON Dashboard files
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  pgdata:
