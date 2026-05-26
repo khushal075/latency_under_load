@@ -219,12 +219,85 @@ This is why adding more sync workers helps up to a point, then stops helping —
 
 ## Benchmark Scenarios
 
-| Scenario | VUs | Duration | Purpose |
-|---|---|---|---|
-| `io_bound` | 0 → 100 | 2 min | Standard API load with 50ms DB queries |
-| `connection_hold` | 0 → 100 | 2 min | Long-held connections — streaming, polling |
-| `burst` | 0 → 200 | 30 sec | Sudden traffic spike simulation |
-| `stress_test` | 0 → 400 | 10 min | Sustained high concurrency — the definitive test |
+### `io_bound`
+*File: `load-test/k6/scenarios/io_bound.js`*
+
+| | |
+|---|---|
+| Endpoint | `GET /io_bound/0.05` |
+| Simulated DB delay | 50ms per request |
+| VU stages | 0 → 50 (30s) → 100 (1m) → 0 (30s) |
+| Total duration | 2 minutes |
+| Think time | 100ms sleep between requests per VU |
+| Thresholds | p95 < 1000ms · failure rate < 50% |
+| Checks | `status is 200` |
+
+Simulates standard API traffic where every request makes a database call. The 50ms delay represents a realistic lightweight query. This is the most common real-world pattern — and the scenario where the async advantage is most visible because workers spend most of their time waiting on the database.
+
+The `sleep(0.1)` between requests means each VU is idle for 100ms after every response. This throttles raw RPS but more accurately reflects real user behaviour than back-to-back hammering.
+
+---
+
+### `connection_hold`
+*File: `load-test/k6/scenarios/connection_hold.js`*
+
+| | |
+|---|---|
+| Endpoint | `GET /connection_hold/0.05` |
+| Simulated DB delay | 50ms — but connection is held open |
+| VU stages | 0 → 50 (30s) → 100 (1m) → 0 (30s) |
+| Total duration | 2 minutes |
+| Think time | 100ms sleep between requests per VU |
+| Thresholds | p95 < 1000ms · failure rate < 50% |
+| Checks | `status is 200` |
+
+Simulates requests that hold a database connection open for an extended period — the pattern behind long-polling, streaming responses, and slow queries that don't release connections quickly. Same VU ramp and thresholds as `io_bound` but against the `/connection_hold/` endpoint.
+
+This is the one scenario where async shows a meaningful weakness. A single uvicorn worker serializes held connections — it cannot pick up a new request until the current connection releases. p95 latency climbed to 400–450ms for uvicorn_1 vs ~120ms for gunicorn_4.
+
+---
+
+### `burst`
+*File: `load-test/k6/scenarios/burst.js`*
+
+| | |
+|---|---|
+| Endpoint | `GET /io_bound/0.05` |
+| Simulated DB delay | 50ms per request |
+| VU stages | 0 → 200 (5s) → 200 (20s) → 0 (5s) |
+| Total duration | 30 seconds |
+| Think time | 100ms sleep between requests per VU |
+| Connection reuse | enabled (`noConnectionReuse: false`) |
+| Checks | `is status 200` |
+
+Simulates a sudden vertical traffic spike — 200 VUs in 5 seconds, held for 20 seconds, then dropped. This is the pattern behind a launch going viral, a campaign hitting, or a product being posted to a high-traffic forum. There is no gradual ramp. The server has no time to stabilize.
+
+This is deliberately the most unforgiving scenario. Connection resets dominate the error logs because requests arrive faster than the OS can queue new TCP connections. pgbouncer helps less here than in the stress test because the damage happens before pooling can intervene.
+
+---
+
+### `stress_test`
+*File: `load-test/k6/scenarios/stress_test.js`*
+
+| | |
+|---|---|
+| Endpoint | `GET /io_bound/0.05` |
+| Simulated DB delay | 50ms per request |
+| VU stages | 0 → 100 (2m) → 200 (2m) → 300 (2m) → 400 (2m) → 0 (2m) |
+| Total duration | 10 minutes |
+| Think time | **1 second** sleep between requests per VU |
+| Connection reuse | enabled (`noConnectionReuse: false`) |
+| Checks | `status is 200` · `latency < 500ms` |
+
+The definitive test. Five stages of 2 minutes each, ramping from 100 to 400 VUs in steps. The server has time to stabilize at each level before being pushed further.
+
+Two important differences from the other scenarios:
+
+1. **`sleep(1)` not `sleep(0.1)`** — each VU waits a full second between requests. This is why stress_test RPS (~189) is much lower than io_bound (~344) despite more VUs. It reflects more realistic user pacing and means the load is spread across more concurrent users rather than concentrated into raw request volume.
+
+2. **Two checks** — `status is 200` and `latency < 500ms`. The latency check is what caused the stress_test results table to show two separate failure counts in the output.
+
+This is where the gunicorn_4 direct configuration took **6 hours 40 minutes** to complete instead of 10 minutes — k6 kept waiting for responses stuck in the connection queue. Every async configuration completed in ~10 minutes.
 
 ---
 
