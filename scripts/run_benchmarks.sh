@@ -15,9 +15,9 @@ RUN_ID=$(date +"%Y%m%d_%H%M%S")
 MODES=("direct" "pgbouncer")
 
 SYNC_RUNNERS=(
-#  "scripts/sync/gunicorn_1.sh"
-#  "scripts/sync/gunicorn_4.sh"
-#  "scripts/sync/gunicorn_threads.sh"
+  "scripts/sync/gunicorn_1.sh"
+  "scripts/sync/gunicorn_4.sh"
+  "scripts/sync/gunicorn_threads.sh"
 )
 
 ASYNC_RUNNERS=(
