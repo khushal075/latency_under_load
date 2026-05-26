@@ -19,6 +19,66 @@ No extra hardware. No extra cost. One architectural decision made at setup time.
 
 ---
 
+## Benchmark Methodology
+
+### Hardware
+
+| | |
+|---|---|
+| Machine | Apple MacBook Pro · Apple M4 |
+| OS | macOS |
+| Runtime | Python 3.11 |
+| All runs | Same machine, same Docker environment, no other load |
+
+### How benchmarks were run
+
+All scenarios were executed by a single orchestration script (`scripts/run_benchmarks.sh`) that ran every configuration automatically in sequence — no manual intervention between runs. The script follows a strict lifecycle for each configuration:
+
+1. Kill and clean the target port
+2. Verify database availability (`nc -z` check with 15s timeout)
+3. Start the server and wait for a healthy `/health` response (up to 20 retries)
+4. Run the k6 scenario
+5. Allow a **10-second settle period** for Prometheus metrics to flush
+6. Hard-kill the server process and clean the port before the next run
+
+This means every configuration started from a clean state — no warmed-up connection pools, no cached query plans carrying over from the previous run. Cold start behavior is part of what is being measured.
+
+### Database
+
+| | |
+|---|---|
+| Engine | PostgreSQL 15 |
+| Connection pooler | PgBouncer (transaction pooling mode) |
+| Direct connection port | 5432 |
+| PgBouncer port | 6432 |
+
+The database was not reset between individual scenario runs within a session. The same data state persisted across all configurations in a given benchmark run.
+
+### Variable isolation
+
+Each mode (`direct` vs `pgbouncer`) was run as a completely separate pass — the `DATABASE_URL` environment variable was switched between passes and every server was restarted. Sync and async configurations were never running simultaneously. Only one server process was alive at any point during a benchmark run.
+
+### k6 scenarios
+
+Each scenario was defined in `load-test/k6/scenarios/` and executed via:
+
+```bash
+BASE_URL="http://localhost:{port}" k6 run "load-test/k6/scenarios/{scenario}.js" --out json="{outfile}"
+```
+
+Raw JSON output was saved per run under `load-test/results/raw/{RUN_ID}_{mode}/` for later analysis.
+
+### What was not controlled for
+
+- **No warmup requests** — servers were started cold and immediately put under load
+- **Single run per configuration** — results were not averaged across multiple runs; variance between runs was not measured
+- **Shared OS resources** — Docker, Prometheus, Grafana, and PgBouncer were all running on the same machine during benchmark runs
+- **Apple Silicon architecture** — results reflect ARM64 performance; x86 production environments may differ
+
+These factors mean the absolute numbers should be treated as indicative rather than definitive. The **relative comparisons** between configurations — run under identical conditions in the same session — are the meaningful signal.
+
+---
+
 ## Results
 
 ### io_bound scenario — 100 VUs · 2 minutes
@@ -116,7 +176,7 @@ pgbouncer dropped gunicorn_4's stress test failure rate from 40.8% → 0.65%. Es
 
 ### 4. Gunicorn threads are worse than workers for I/O workloads
 
-The threaded configuration performed worst in nearly every scenario — 29% failure on io_bound, 57% failure on burst. Python's GIL prevents true I/O concurrency in threads. Four separate worker processes consistently outperform threading by a wide margin.
+The threaded configuration performed worst in nearly every scenario — 29% failure on io_bound, 57% failure on burst. The reason isn't the GIL — the GIL is actually released during I/O waits, so threads can run concurrently during database calls. The real culprits are connection pool contention (all threads share one pool) and context-switching overhead under high concurrency. Four independent worker processes each get their own connection pool and memory space, eliminating both bottlenecks.
 
 ### 5. Burst traffic is the hardest test for everyone
 
@@ -150,7 +210,7 @@ Request A → DB wait (frozen) →   Request A → DB wait →
                                   [C returns] → respond
 ```
 
-This is why adding more sync workers helps up to a point, then stops helping — the database connection pool becomes the constraint. pgbouncer addresses the symptom. Async addresses the cause.
+This is why adding more sync workers helps up to a point, then stops helping — the database connection pool becomes the constraint. pgbouncer reduces how often you hit that ceiling. Async raises the ceiling further by releasing connections faster — holding them only while a query is actively running rather than for the full duration of a request. Neither eliminates the ceiling entirely. Under sufficient load, the database becomes the bottleneck regardless of architecture. But async gets there much later.
 
 ---
 
@@ -383,14 +443,59 @@ During the gunicorn_4 direct stress test, average latency was 306ms — reasonab
 **2. More workers ≠ more reliability at scale.**
 Scaling sync workers improves throughput linearly until the database connection pool saturates. Beyond that ceiling, adding workers does nothing. pgbouncer raises that ceiling. Async removes it.
 
-**3. The GIL makes threading the worst of both worlds.**
-For I/O-bound Python workloads, threads give you the complexity of concurrency without the benefit. Separate worker processes (gunicorn_4) consistently outperformed gunicorn_threads across every scenario.
+**3. Threads underperform processes for I/O — but not because of the GIL.**
+The GIL is released during I/O waits, so threads can technically run concurrently during database calls. The real issue is that threads share a single connection pool (causing contention under load) and incur context-switching overhead that compounds at high concurrency. Independent processes each get their own connection pool and memory space — that isolation is what makes gunicorn_4 consistently outperform gunicorn_threads across every scenario.
 
 **4. pgbouncer is a meaningful safety net — until it isn't.**
 pgbouncer dramatically improved sync reliability on sustained load (stress_test). But on burst traffic — where connection resets happen before the pool can intervene — it helped far less. Pooling addresses steady-state exhaustion, not instantaneous spikes.
 
 **5. Async doesn't eliminate all latency costs.**
 The connection_hold scenario showed async's real weakness: when connections are held open for a long time, the event loop can't fully exploit its concurrency model. p95 latency on connection_hold reached 450ms for uvicorn_1 vs 121ms for gunicorn_4. Know your workload before choosing your architecture.
+
+---
+
+## Limitations
+
+These limitations don't invalidate the findings — the relative comparisons between configurations were run under identical conditions and remain meaningful. But they define the boundaries of what can and cannot be concluded from these results.
+
+### 1. I/O-bound workloads only
+
+Every scenario in this benchmark involves waiting on a database query. Async's advantage is fundamentally about reclaiming idle wait time — so this is the workload where async looks best.
+
+For CPU-bound workloads (image processing, data transformation, ML inference), the async event loop provides no benefit and can actually hurt performance by blocking the loop. The GIL prevents true parallelism regardless of sync or async architecture in those cases. This benchmark makes no claims about CPU-bound performance.
+
+### 2. Single-node PostgreSQL with no realistic data volume
+
+The PostgreSQL instance runs as a single Docker container with a small dataset. Production databases have buffer cache effects, index sizes, lock contention across concurrent writes, and query planner behavior that emerges only at realistic data volumes. The 50ms simulated query delay in the io_bound scenario approximates I/O wait but does not reflect real query complexity.
+
+### 3. Local Docker networking
+
+All components — application server, PostgreSQL, PgBouncer, Prometheus, Grafana — ran on the same machine connected via Docker's virtual network. Production latency between an application server and a database over a real network (even within the same datacenter) introduces additional variance that could change the absolute numbers. The relative comparisons between configurations should still hold.
+
+### 4. Apple Silicon (ARM64)
+
+All results were collected on an Apple M4 MacBook. Python, Gunicorn, Uvicorn, and PostgreSQL may behave differently on x86-64 Linux — the architecture used in most production cloud environments. Scheduler behavior, memory allocation patterns, and I/O handling differ between ARM64 macOS and x86 Linux. The directional findings are expected to hold, but the specific numbers should not be used as production capacity estimates.
+
+### 5. Single run per configuration
+
+Each configuration was benchmarked once per session. Results were not averaged across multiple runs and variance between runs was not measured. A single run can be affected by transient factors — OS scheduler decisions, Docker resource contention, background processes. The consistency across scenarios within a session gives confidence in the relative rankings, but individual numbers carry unknown variance.
+
+### 6. No warmup period
+
+Servers were started cold and immediately put under load. Production servers typically have warmed JIT caches, pre-established connection pools, and OS-level TCP optimizations from prior traffic. Cold-start behavior inflates early latency numbers slightly — visible in the lower throughput at the start of ramp-up phases.
+
+### 7. Shared observability overhead
+
+Prometheus scraping, Grafana, and PgBouncer metrics exporters were all running on the same machine during benchmark runs. This adds a small but nonzero resource overhead that a dedicated benchmark environment would eliminate.
+
+### What the results are still good for
+
+Despite these limitations, the core findings are robust:
+
+- The **relative ordering** of configurations is consistent across all four scenarios
+- The **failure rate gap** between sync and async is large enough that hardware variance, warmup effects, or single-run noise cannot explain it
+- The **pgbouncer impact on sync** is consistent and directionally reliable
+- The **connection_hold weakness of async** appears across all async configurations regardless of worker count or pgbouncer mode — it is a structural finding, not noise
 
 ---
 
