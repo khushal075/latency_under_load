@@ -1,0 +1,114 @@
+<svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">
+  <defs>
+    <style>
+      .bg { fill: #ffffff; }
+      .bg-surface { fill: #f8f7f4; }
+      .text-primary { fill: #1a1a18; }
+      .text-secondary { fill: #5f5e5a; }
+      .text-tertiary { fill: #888780; }
+      .divider { stroke: #d3d1c7; stroke-width: 0.5; }
+      .grid { stroke: #e8e6e0; stroke-width: 0.5; }
+      .axis { stroke: #b4b2a9; stroke-width: 0.5; }
+    </style>
+  </defs>
+
+  <rect width="760" height="420" rx="12" class="bg"/>
+  <rect x="1" y="1" width="758" height="418" rx="11" fill="none" stroke="#d3d1c7" stroke-width="0.5"/>
+
+  <!-- header -->
+  <text x="40" y="40" font-size="11" font-weight="500" class="text-tertiary" letter-spacing="0.07em">STRESS TEST · 400 VUs · 10 MINUTES · SUCCESS RATE %</text>
+  <text x="40" y="68" font-size="20" font-weight="500" class="text-primary">All configurations compared</text>
+
+  <line x1="40" y1="84" x2="720" y2="84" class="divider"/>
+
+  <!-- legend -->
+  <rect x="40" y="94" width="10" height="10" rx="2" fill="#3a8fe0"/>
+  <text x="55" y="103.5" font-size="11" class="text-secondary">sync · direct</text>
+  <rect x="148" y="94" width="10" height="10" rx="2" fill="#1d9e75"/>
+  <text x="163" y="103.5" font-size="11" class="text-secondary">sync · pgbouncer</text>
+  <rect x="282" y="94" width="10" height="10" rx="2" fill="#e8793a"/>
+  <text x="297" y="103.5" font-size="11" class="text-secondary">async · direct</text>
+  <rect x="388" y="94" width="10" height="10" rx="2" fill="#7e57c2"/>
+  <text x="403" y="103.5" font-size="11" class="text-secondary">async · pgbouncer</text>
+
+  <!-- chart area: x=40..720, y=120..360 — height=240, width=680 -->
+  <!-- y grid lines at 0, 25, 50, 75, 100 -->
+  <!-- y=360 = 0%, y=120 = 100% so 1% = 2.4px -->
+
+  <line x1="40" y1="360" x2="720" y2="360" class="axis"/>
+  <line x1="40" y1="120" x2="720" y2="120" class="grid"/>
+  <line x1="40" y1="180" x2="720" y2="180" class="grid"/>
+  <line x1="40" y1="240" x2="720" y2="240" class="grid"/>
+  <line x1="40" y1="300" x2="720" y2="300" class="grid"/>
+
+  <!-- y axis labels -->
+  <text x="34" y="364" font-size="10" class="text-tertiary" text-anchor="end">0%</text>
+  <text x="34" y="304" font-size="10" class="text-tertiary" text-anchor="end">25%</text>
+  <text x="34" y="244" font-size="10" class="text-tertiary" text-anchor="end">50%</text>
+  <text x="34" y="184" font-size="10" class="text-tertiary" text-anchor="end">75%</text>
+  <text x="34" y="124" font-size="10" class="text-tertiary" text-anchor="end">100%</text>
+
+  <!-- configs on x axis, 5 groups with spacing -->
+  <!-- group width = 680/5 = 136px each. bar width ~18px, gap 4px, 4 bars per group -->
+  <!-- group centers at: 40 + 68 = 108, 244, 380, 516, 652 -->
+  <!-- within group: bar1 at center-38, bar2 at -14, bar3 at +10, bar4 at +34 -->
+
+  <!-- data: success % (100 - failure) -->
+  <!-- g1d: no stress test recorded — skip -->
+  <!-- g4d: 59% success → height = 59*2.4=141.6, y=360-141.6=218.4 -->
+  <!-- gthd: 45% → 108, y=252 -->
+  <!-- g4p: 99.67% → 239.2, y=120.8 -->
+  <!-- gthp: 72.63% → 174.3, y=185.7 -->
+  <!-- uv1d: 99.99% → 240, y=120 -->
+  <!-- uv4d: 100% → 240, y=120 -->
+  <!-- uv1p: 100% → 240, y=120 -->
+  <!-- uv4p: 100% → 240, y=120 -->
+
+  <!-- GROUP 1: gunicorn_1 — no data for stress test -->
+  <!-- x center = 108 -->
+  <text x="108" y="380" font-size="10" class="text-tertiary" text-anchor="middle">g1</text>
+  <text x="108" y="392" font-size="10" class="text-tertiary" text-anchor="middle">direct</text>
+  <text x="108" y="350" font-size="10" class="text-tertiary" text-anchor="middle">n/a</text>
+
+  <!-- GROUP 2: gunicorn_4 — x center = 244 -->
+  <!-- g4d bar: sync direct = blue -->
+  <rect x="220" y="218" width="18" height="142" rx="3" fill="#3a8fe0"/>
+  <text x="229" y="214" font-size="10" fill="#185fa5" text-anchor="middle">59%</text>
+  <!-- g4p bar: sync pgb = green -->
+  <rect x="244" y="121" width="18" height="239" rx="3" fill="#1d9e75"/>
+  <text x="253" y="117" font-size="10" fill="#0f6e56" text-anchor="middle">99.7%</text>
+  <text x="244" y="380" font-size="10" class="text-tertiary" text-anchor="middle">g4</text>
+  <text x="244" y="392" font-size="10" class="text-tertiary" text-anchor="middle">sync</text>
+
+  <!-- GROUP 3: gunicorn_threads — x center = 380 -->
+  <!-- gthd -->
+  <rect x="356" y="252" width="18" height="108" rx="3" fill="#3a8fe0"/>
+  <text x="365" y="248" font-size="10" fill="#185fa5" text-anchor="middle">45%</text>
+  <!-- gthp -->
+  <rect x="380" y="186" width="18" height="174" rx="3" fill="#1d9e75"/>
+  <text x="389" y="182" font-size="10" fill="#0f6e56" text-anchor="middle">72.6%</text>
+  <text x="380" y="380" font-size="10" class="text-tertiary" text-anchor="middle">gth</text>
+  <text x="380" y="392" font-size="10" class="text-tertiary" text-anchor="middle">sync</text>
+
+  <!-- GROUP 4: uvicorn_1 — x center = 516 -->
+  <!-- uv1d -->
+  <rect x="492" y="120" width="18" height="240" rx="3" fill="#e8793a"/>
+  <text x="501" y="116" font-size="10" fill="#993c1d" text-anchor="middle">~100%</text>
+  <!-- uv1p -->
+  <rect x="516" y="120" width="18" height="240" rx="3" fill="#7e57c2"/>
+  <text x="516" y="380" font-size="10" class="text-tertiary" text-anchor="middle">uv1</text>
+  <text x="516" y="392" font-size="10" class="text-tertiary" text-anchor="middle">async</text>
+
+  <!-- GROUP 5: uvicorn_4 — x center = 652 -->
+  <!-- uv4d -->
+  <rect x="628" y="120" width="18" height="240" rx="3" fill="#e8793a"/>
+  <text x="637" y="116" font-size="10" fill="#993c1d" text-anchor="middle">100%</text>
+  <!-- uv4p -->
+  <rect x="652" y="120" width="18" height="240" rx="3" fill="#7e57c2"/>
+  <text x="652" y="380" font-size="10" class="text-tertiary" text-anchor="middle">uv4</text>
+  <text x="652" y="392" font-size="10" class="text-tertiary" text-anchor="middle">async</text>
+
+  <!-- footer -->
+  <line x1="40" y1="403" x2="720" y2="403" class="divider"/>
+  <text x="40" y="416" font-size="11" class="text-tertiary">k6 stress_test · 400 VUs ramped over 10 minutes · PostgreSQL backend</text>
+</svg>

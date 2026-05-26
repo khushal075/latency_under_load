@@ -1,0 +1,75 @@
+<svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">
+  <defs>
+    <style>
+      .bg { fill: #ffffff; }
+      .bg-surface { fill: #f8f7f4; }
+      .text-primary { fill: #1a1a18; }
+      .text-secondary { fill: #5f5e5a; }
+      .text-tertiary { fill: #888780; }
+      .bar-bad { fill: #f09595; }
+      .bar-good { fill: #c0dd97; }
+      .label-bad { fill: #791f1f; }
+      .label-good { fill: #27500a; }
+      .badge-bad-bg { fill: #fcebeb; }
+      .badge-bad-text { fill: #a32d2d; }
+      .badge-good-bg { fill: #eaf3de; }
+      .badge-good-text { fill: #3b6d11; }
+      .divider { stroke: #d3d1c7; stroke-width: 0.5; }
+      .annotation { fill: #a32d2d; }
+      .annotation-line { stroke: #a32d2d; stroke-width: 1; stroke-dasharray: 4 3; }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect width="760" height="340" rx="12" class="bg" />
+  <rect x="1" y="1" width="758" height="338" rx="11" fill="none" stroke="#d3d1c7" stroke-width="0.5"/>
+
+  <!-- header -->
+  <text x="40" y="44" font-size="11" font-weight="500" class="text-tertiary" letter-spacing="0.07em">STRESS TEST · 400 SIMULTANEOUS USERS · 10 MINUTES</text>
+  <text x="40" y="76" font-size="22" font-weight="500" class="text-primary">Same code. Same database. One decision.</text>
+
+  <line x1="40" y1="94" x2="720" y2="94" class="divider"/>
+
+  <!-- Server A row -->
+  <text x="40" y="126" font-size="13" font-weight="500" class="text-secondary">Server A</text>
+  <!-- badge sync -->
+  <rect x="112" y="112" width="46" height="18" rx="9" class="badge-bad-bg"/>
+  <text x="135" y="124.5" font-size="11" font-weight="500" class="badge-bad-text" text-anchor="middle">sync</text>
+
+  <!-- bar A track -->
+  <rect x="40" y="134" width="600" height="38" rx="4" class="bg-surface"/>
+  <!-- bar A fill — 47% of 600 = 282 -->
+  <rect x="40" y="134" width="282" height="38" rx="4" class="bar-bad"/>
+  <text x="54" y="158" font-size="12" font-weight="500" class="label-bad">nearly 1 in 2 requests failed</text>
+
+  <!-- pct label -->
+  <text x="700" y="148" font-size="30" font-weight="500" class="badge-bad-text" text-anchor="end">47%</text>
+  <text x="700" y="166" font-size="12" class="text-tertiary" text-anchor="end">failure rate</text>
+
+  <!-- annotation arrow -->
+  <line x1="322" y1="134" x2="322" y2="108" class="annotation-line"/>
+  <text x="326" y="106" font-size="11" class="annotation">breaks here</text>
+
+  <line x1="40" y1="196" x2="720" y2="196" class="divider"/>
+
+  <!-- Server B row -->
+  <text x="40" y="228" font-size="13" font-weight="500" class="text-secondary">Server B</text>
+  <!-- badge async -->
+  <rect x="116" y="214" width="50" height="18" rx="9" class="badge-good-bg"/>
+  <text x="141" y="226.5" font-size="11" font-weight="500" class="badge-good-text" text-anchor="middle">async</text>
+
+  <!-- bar B track -->
+  <rect x="40" y="236" width="600" height="38" rx="4" class="bg-surface"/>
+  <!-- bar B fill — 0% — just a tiny sliver to show the track is active -->
+  <rect x="40" y="236" width="3" height="38" rx="2" class="bar-good"/>
+  <text x="54" y="260" font-size="12" font-weight="500" class="label-good">every user got through</text>
+
+  <!-- pct label -->
+  <text x="700" y="250" font-size="30" font-weight="500" class="badge-good-text" text-anchor="end">0%</text>
+  <text x="700" y="268" font-size="12" class="text-tertiary" text-anchor="end">failure rate</text>
+
+  <line x1="40" y1="298" x2="720" y2="298" class="divider"/>
+
+  <!-- footer -->
+  <text x="40" y="320" font-size="11" class="text-tertiary">k6 stress_test scenario · gunicorn 4 workers vs uvicorn 4 workers · PostgreSQL · direct connection</text>
+</svg>
